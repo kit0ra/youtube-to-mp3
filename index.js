@@ -4,27 +4,42 @@ import ytdl from '@distube/ytdl-core'
 import cliProgress from 'cli-progress'
 import fs from 'fs'
 import path from 'path'
-
-const __dirname = path.resolve()
+import { Command } from 'commander'
 
 const { setFfmpegPath } = pkg
 setFfmpegPath(ffmpegPath)
 
 const ffmpeg = pkg
 
-const convertToMp3 = async url => {
+const __dirname = path.resolve()
+
+// Configure command-line options
+const program = new Command()
+program
+  .version('1.0.0')
+  .description('YouTube to MP3 Converter')
+  .option('-u, --url <url>', 'YouTube video URL')
+  .option('-o, --output <folder>', 'Output folder for MP3 file', 'downloads')
+  .parse(process.argv)
+
+const options = program.opts()
+
+if (!options.url) {
+  console.error(
+    'Error: Please specify a YouTube URL using the -u or --url option.'
+  )
+  process.exit(1)
+}
+
+const convertToMp3 = async (url, outputFolder) => {
   try {
-    // Fetch basic information to get the video title and duration
     const info = await ytdl.getInfo(url)
     const title = info.videoDetails.title.replace(/[<>:"/\\|?*\x00-\x1F]/g, '') // Sanitize file name
 
-    // Create downloads folder if it doesn't exist
-    const downloadsFolder = path.join(__dirname, 'downloads')
-    if (!fs.existsSync(downloadsFolder)) {
-      fs.mkdirSync(downloadsFolder)
+    const outputPath = path.join(__dirname, outputFolder, `${title}.mp3`)
+    if (!fs.existsSync(outputFolder)) {
+      fs.mkdirSync(outputFolder, { recursive: true })
     }
-
-    const outputPath = path.join(downloadsFolder, `${title}.mp3`)
 
     console.log(`Starting conversion for: ${title}`)
 
@@ -39,9 +54,9 @@ const convertToMp3 = async url => {
     let downloadedBytes = 0
     const videoStream = ytdl(url, { quality: 'highestaudio' }).on(
       'progress',
-      (chunkLength, downloaded, total) => {
+      (chunkLength, total) => {
         downloadedBytes += chunkLength
-        const percent = Math.round((downloadedBytes / total) * 100) // Round to nearest whole number
+        const percent = Math.round((downloadedBytes / total) * 100)
         progressBar.update(percent) // Update progress bar
       }
     )
@@ -59,10 +74,8 @@ const convertToMp3 = async url => {
       })
       .save(outputPath)
   } catch (error) {
-    console.error(`Failed to convert: ${error.message}`)
+    console.error(`\nFailed to convert: ${error.message}`)
   }
 }
 
-// Usage example
-const youtubeUrl = 'https://www.youtube.com/watch?v=QtXby3twMmI'
-convertToMp3(youtubeUrl)
+convertToMp3(options.url, options.output)
